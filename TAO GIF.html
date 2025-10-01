@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trình Tạo GIF Trước & Sau</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .upload-box {
+            border: 2px dashed #d1d5db;
+            transition: all 0.2s ease-in-out;
+        }
+        .upload-box:hover, .upload-box.dragover {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+        .sortable-ghost {
+            opacity: 0.4;
+            background: #c7d2fe;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 antialiased">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-6xl">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-900">Trình Tạo GIF Trước & Sau</h1>
+            <p class="text-lg text-gray-600 mt-2">Tải lên hai ảnh để tạo hiệu ứng trượt và kết hợp chúng thành một GIF độc đáo!</p>
+        </header>
+
+        <main class="bg-white p-6 rounded-2xl shadow-lg">
+            <!-- Phần Tải Lên Ảnh -->
+            <section id="upload-section">
+                <h2 class="text-2xl font-semibold mb-4 text-center">1. Tải Lên Ảnh Của Bạn</h2>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div id="before-dropzone" class="upload-box p-6 rounded-lg text-center cursor-pointer">
+                        <input type="file" id="before-img-input" accept="image/*" class="hidden">
+                        <div id="before-prompt">
+                            <i data-lucide="image-plus" class="mx-auto h-16 w-16 text-gray-400"></i>
+                            <p class="font-semibold text-blue-600 mt-2">Chọn ảnh "TRƯỚC"</p>
+                            <p class="text-sm text-gray-500">hoặc kéo và thả vào đây</p>
+                        </div>
+                        <img id="before-preview" src="" class="hidden max-h-64 mx-auto rounded-md object-contain"/>
+                    </div>
+                    <div id="after-dropzone" class="upload-box p-6 rounded-lg text-center cursor-pointer">
+                        <input type="file" id="after-img-input" accept="image/*" class="hidden">
+                         <div id="after-prompt">
+                            <i data-lucide="image-plus" class="mx-auto h-16 w-16 text-gray-400"></i>
+                            <p class="font-semibold text-blue-600 mt-2">Chọn ảnh "SAU"</p>
+                            <p class="text-sm text-gray-500">hoặc kéo và thả vào đây</p>
+                        </div>
+                        <img id="after-preview" src="" class="hidden max-h-64 mx-auto rounded-md object-contain"/>
+                    </div>
+                </div>
+                <div class="text-center mt-6">
+                    <button id="create-gif-btn" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-transform transform hover:scale-105" disabled>
+                        <span class="flex items-center justify-center">
+                            <i data-lucide="film" class="mr-2 h-5 w-5"></i>
+                            Tạo GIF
+                        </span>
+                    </button>
+                </div>
+            </section>
+            
+            <!-- Vùng Xem Trước & Loading -->
+            <div id="loading-container" class="hidden flex-col items-center justify-center my-8 p-6 bg-gray-50 rounded-lg">
+                <div class="loader"></div>
+                <p class="mt-4 text-gray-600 font-semibold">Đang xử lý... Vui lòng đợi trong giây lát.</p>
+            </div>
+            
+            <!-- Thư Viện GIF -->
+            <section id="gallery-section" class="mt-12 hidden">
+                <h2 class="text-2xl font-semibold mb-4 text-center">2. Thư Viện GIF Của Bạn</h2>
+                <div id="gif-gallery" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    <!-- Các GIF được tạo sẽ được thêm vào đây -->
+                </div>
+                <div class="text-center mt-8">
+                    <button id="combine-gif-btn" class="bg-green-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-transform transform hover:scale-105" disabled>
+                        <span class="flex items-center justify-center">
+                            <i data-lucide="combine" class="mr-2 h-5 w-5"></i>
+                            Nối Các GIF
+                        </span>
+                    </button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal Nối GIF -->
+    <div id="combine-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 md:p-8 w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold">Nối và Tùy Chỉnh GIF</h3>
+                <button id="close-combine-modal" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-8 w-8"></i></button>
+            </div>
+            <p class="text-gray-600 mb-4">Kéo và thả để sắp xếp thứ tự các GIF. Chúng sẽ được nối thành một file duy nhất.</p>
+            <div id="combine-gif-list" class="flex-grow overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 bg-gray-100 p-4 rounded-lg min-h-[200px]">
+                <!-- Danh sách GIF để sắp xếp -->
+            </div>
+            <div class="mt-6">
+                <label for="aspect-ratio-select" class="block text-lg font-semibold mb-2">Chọn Khung Hình:</label>
+                <select id="aspect-ratio-select" class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="1/1" selected>Vuông (1x1)</option>
+                    <option value="3/4">Dọc (3x4)</option>
+                    <option value="4/3">Ngang (4x3)</option>
+                </select>
+            </div>
+            <div class="mt-8 text-center">
+                <button id="process-combine-btn" class="bg-purple-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-purple-700 transition-transform transform hover:scale-105">
+                    <span class="flex items-center justify-center">
+                        <i data-lucide="wand-2" class="mr-2 h-5 w-5"></i>
+                        Xử Lý & Tải Về
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Tải Về & Chỉnh Sửa Chất Lượng -->
+    <div id="download-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 md:p-8 w-full max-w-lg">
+             <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold">Tùy Chỉnh & Tải Về</h3>
+                <button id="close-download-modal" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-8 w-8"></i></button>
+            </div>
+            <div class="space-y-6">
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label for="speed-slider" class="font-semibold">Tốc độ (Thời gian)</label>
+                        <span id="speed-value" class="text-blue-600 font-mono bg-blue-100 px-2 py-1 rounded">2.0s</span>
+                    </div>
+                    <input id="speed-slider" type="range" min="1" max="2" step="0.5" value="2" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label for="quality-slider" class="font-semibold">Chất lượng (Phân giải)</label>
+                        <span id="quality-value" class="text-green-600 font-mono bg-green-100 px-2 py-1 rounded">100%</span>
+                    </div>
+                    <input id="quality-slider" type="range" min="50" max="100" step="10" value="100" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+            </div>
+            <div class="mt-8 text-center bg-gray-100 p-4 rounded-lg">
+                <p class="text-lg font-semibold">Ước tính dung lượng file:</p>
+                <p id="file-size-display" class="text-2xl font-bold text-gray-800 mt-1">--- KB</p>
+            </div>
+            <div class="mt-8 text-center">
+                <button id="final-download-btn" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-blue-700 transition-transform transform hover:scale-105 w-full">
+                    <span class="flex items-center justify-center">
+                        <i data-lucide="download" class="mr-2 h-5 w-5"></i>
+                        Tải Xuống GIF
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        const beforeImgInput = document.getElementById('before-img-input');
+        const afterImgInput = document.getElementById('after-img-input');
+        const beforePreview = document.getElementById('before-preview');
+        const afterPreview = document.getElementById('after-preview');
+        const createGifBtn = document.getElementById('create-gif-btn');
+        const gallerySection = document.getElementById('gallery-section');
+        const gifGallery = document.getElementById('gif-gallery');
+        const combineGifBtn = document.getElementById('combine-gif-btn');
+        const loadingContainer = document.getElementById('loading-container');
+        
+        const beforeDropzone = document.getElementById('before-dropzone');
+        const afterDropzone = document.getElementById('after-dropzone');
+        const beforePrompt = document.getElementById('before-prompt');
+        const afterPrompt = document.getElementById('after-prompt');
+
+        // Modals
+        const combineModal = document.getElementById('combine-modal');
+        const closeCombineModalBtn = document.getElementById('close-combine-modal');
+        const combineGifList = document.getElementById('combine-gif-list');
+        const processCombineBtn = document.getElementById('process-combine-btn');
+        const aspectRatioSelect = document.getElementById('aspect-ratio-select');
+
+        const downloadModal = document.getElementById('download-modal');
+        const closeDownloadModalBtn = document.getElementById('close-download-modal');
+        const speedSlider = document.getElementById('speed-slider');
+        const qualitySlider = document.getElementById('quality-slider');
+        const speedValue = document.getElementById('speed-value');
+        const qualityValue = document.getElementById('quality-value');
+        const fileSizeDisplay = document.getElementById('file-size-display');
+        const finalDownloadBtn = document.getElementById('final-download-btn');
+
+        let beforeFile = null;
+        let afterFile = null;
+        let gifCounter = 0;
+        let createdGifs = [];
+        let sortableCombineList = null;
+        let currentGifDataForDownload = null;
+        let gifWorkerUrl = null; // Variable to store the worker URL
+
+        // --- Function to get a local worker URL to avoid CORS errors ---
+        async function getGifWorkerUrl() {
+            if (gifWorkerUrl) {
+                return gifWorkerUrl;
+            }
+            try {
+                const response = await fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                const scriptContent = await response.text();
+                const blob = new Blob([scriptContent], { type: 'application/javascript' });
+                gifWorkerUrl = URL.createObjectURL(blob);
+                return gifWorkerUrl;
+            } catch (error) {
+                console.error('Could not fetch gif.worker.js. This might be a network or CORS issue.', error);
+                // Fallback to the original URL, which might still fail but is a last resort.
+                return 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js';
+            }
+        }
+
+
+        // --- Drag and Drop Logic ---
+        function setupDropzone(dropzone, input, preview, prompt, fileVariableSetter) {
+            dropzone.addEventListener('click', () => input.click());
+            dropzone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropzone.classList.add('dragover');
+            });
+            dropzone.addEventListener('dragleave', () => {
+                dropzone.classList.remove('dragover');
+            });
+            dropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropzone.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0 && files[0].type.startsWith('image/')) {
+                    input.files = files;
+                    handleFileSelect({ target: input }, preview, prompt, fileVariableSetter);
+                }
+            });
+        }
+        
+        function handleFileSelect(event, preview, prompt, fileVariableSetter) {
+            const file = event.target.files[0];
+            if (file) {
+                fileVariableSetter(file);
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    preview.src = e.target.result;
+                    preview.classList.remove('hidden');
+                    prompt.classList.add('hidden');
+                    checkInputs();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        setupDropzone(beforeDropzone, beforeImgInput, beforePreview, beforePrompt, (file) => beforeFile = file);
+        setupDropzone(afterDropzone, afterImgInput, afterPreview, afterPrompt, (file) => afterFile = file);
+
+        beforeImgInput.addEventListener('change', (e) => handleFileSelect(e, beforePreview, beforePrompt, (file) => beforeFile = file));
+        afterImgInput.addEventListener('change', (e) => handleFileSelect(e, afterPreview, afterPrompt, (file) => afterFile = file));
+
+        function checkInputs() {
+            createGifBtn.disabled = !(beforeFile && afterFile);
+        }
+        
+        createGifBtn.addEventListener('click', async () => {
+            loadingContainer.classList.remove('hidden');
+            loadingContainer.classList.add('flex');
+            createGifBtn.disabled = true;
+
+            await new Promise(resolve => setTimeout(resolve, 100)); // Allow UI to update
+            
+            try {
+                const gifData = await generateGif(beforeFile, afterFile, 2, 100);
+                addGifToGallery(gifData);
+            } catch (error) {
+                console.error("Error creating GIF:", error);
+                alert("Đã xảy ra lỗi khi tạo GIF. Vui lòng thử lại.");
+            } finally {
+                loadingContainer.classList.add('hidden');
+                loadingContainer.classList.remove('flex');
+                createGifBtn.disabled = false;
+            }
+        });
+
+        function loadImage(file) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        async function generateGif(beforeFile, afterFile, durationSec, quality) {
+             return new Promise(async (resolve, reject) => {
+                const beforeImage = await loadImage(beforeFile);
+                const afterImage = await loadImage(afterFile);
+
+                const baseWidth = beforeImage.naturalWidth;
+                const baseHeight = beforeImage.naturalHeight;
+                
+                const scale = quality / 100;
+                const width = Math.round(baseWidth * scale);
+                const height = Math.round(baseHeight * scale);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                
+                const frameDelay = 1000 / 30; // 30 FPS
+                const totalFrames = durationSec * 30;
+
+                const workerScriptUrl = await getGifWorkerUrl(); // Get local worker URL
+
+                const gif = new GIF({
+                    workers: 2,
+                    quality: 10,
+                    width: width,
+                    height: height,
+                    workerScript: workerScriptUrl // Use local URL
+                });
+
+                for (let i = 0; i <= totalFrames; i++) {
+                    const progress = i / totalFrames;
+                    
+                    ctx.clearRect(0, 0, width, height);
+                    ctx.drawImage(beforeImage, 0, 0, width, height);
+
+                    const slideWidth = width * progress;
+                    // Draw the "after" image on top, cropped by the slide width
+                    ctx.drawImage(
+                        afterImage, 
+                        0, 0, // Start from top-left of source image
+                        afterImage.naturalWidth * progress, afterImage.naturalHeight, // Crop the source image
+                        0, 0, // Draw at top-left of canvas
+                        width * progress, height // Size to draw on canvas
+                    );
+                    
+                    gif.addFrame(ctx, { copy: true, delay: frameDelay });
+                }
+
+                gif.on('finished', function(blob) {
+                    resolve({
+                        blob,
+                        id: `gif-${gifCounter}`,
+                        beforeFile,
+                        afterFile
+                    });
+                });
+                
+                gif.on('abort', () => reject('GIF creation aborted'));
+
+                gif.render();
+            });
+        }
+        
+        function addGifToGallery(gifData) {
+            gifCounter++;
+            gallerySection.classList.remove('hidden');
+            
+            const gifUrl = URL.createObjectURL(gifData.blob);
+
+            const container = document.createElement('div');
+            container.className = 'relative group border-2 border-gray-200 rounded-lg p-2 bg-white';
+            container.dataset.id = gifData.id;
+            
+            const img = document.createElement('img');
+            img.src = gifUrl;
+            img.className = 'w-full h-auto object-cover rounded-md';
+            container.appendChild(img);
+
+            const overlay = document.createElement('div');
+            overlay.className = 'absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-300 flex items-center justify-center gap-2 rounded-lg';
+            
+            const downloadButton = document.createElement('button');
+            downloadButton.title = "Tải xuống GIF này";
+            downloadButton.className = 'p-2 bg-white text-blue-600 rounded-full opacity-0 group-hover:opacity-100 transform group-hover:scale-110 transition-all duration-300';
+            downloadButton.innerHTML = `<i data-lucide="download" class="h-6 w-6"></i>`;
+            downloadButton.onclick = () => openDownloadModal(gifData);
+
+            // Nút Xóa
+            const deleteButton = document.createElement('button');
+            deleteButton.title = "Xóa GIF này";
+            deleteButton.className = 'p-2 bg-white text-red-600 rounded-full opacity-0 group-hover:opacity-100 transform group-hover:scale-110 transition-all duration-300';
+            deleteButton.innerHTML = `<i data-lucide="x" class="h-6 w-6"></i>`;
+            deleteButton.onclick = (e) => {
+                e.stopPropagation(); 
+                deleteGif(gifData.id);
+            };
+            
+            overlay.appendChild(downloadButton);
+            overlay.appendChild(deleteButton); // Thêm nút xóa vào overlay
+            container.appendChild(overlay);
+            gifGallery.appendChild(container);
+            
+            lucide.createIcons();
+            
+            createdGifs.push(gifData);
+            combineGifBtn.disabled = createdGifs.length < 1;
+        }
+
+        function deleteGif(gifId) {
+            // Xóa khỏi mảng dữ liệu
+            createdGifs = createdGifs.filter(gif => gif.id !== gifId);
+
+            // Xóa khỏi giao diện
+            const gifElement = gifGallery.querySelector(`[data-id="${gifId}"]`);
+            if (gifElement) {
+                gifElement.remove();
+            }
+
+            // Cập nhật trạng thái nút và giao diện
+            combineGifBtn.disabled = createdGifs.length < 1;
+            if (createdGifs.length === 0) {
+                gallerySection.classList.add('hidden');
+            }
+        }
+
+        function openDownloadModal(gifData) {
+            currentGifDataForDownload = gifData;
+            
+            // Reset sliders
+            if(currentGifDataForDownload.isCombined) {
+                const duration = currentGifDataForDownload.duration;
+                speedSlider.max = duration;
+                speedSlider.value = duration;
+                speedSlider.min = duration * 0.5;
+                speedValue.textContent = `${duration.toFixed(1)}s`;
+            } else {
+                 speedSlider.max = 2;
+                 speedSlider.min = 1;
+                 speedSlider.value = 2;
+                 speedValue.textContent = '2.0s';
+            }
+            
+            qualitySlider.value = 100;
+            qualityValue.textContent = '100%';
+            
+            updateFileSize();
+            downloadModal.classList.remove('hidden');
+        }
+
+        closeDownloadModalBtn.addEventListener('click', () => downloadModal.classList.add('hidden'));
+
+        speedSlider.addEventListener('input', () => {
+            speedValue.textContent = `${parseFloat(speedSlider.value).toFixed(1)}s`;
+            updateFileSize();
+        });
+        qualitySlider.addEventListener('input', () => {
+            qualityValue.textContent = `${qualitySlider.value}%`;
+            updateFileSize();
+        });
+
+        let updateTimeout;
+        function updateFileSize() {
+            fileSizeDisplay.textContent = 'Đang tính toán...';
+            clearTimeout(updateTimeout);
+            updateTimeout = setTimeout(async () => {
+                if (!currentGifDataForDownload) return;
+
+                const duration = parseFloat(speedSlider.value);
+                const quality = parseInt(qualitySlider.value);
+                
+                let gifBlob;
+                if(currentGifDataForDownload.isCombined){
+                    gifBlob = (await generateCombinedGif(currentGifDataForDownload.orderedGifs, currentGifDataForDownload.aspectRatio, duration, quality)).blob;
+                } else {
+                    gifBlob = (await generateGif(currentGifDataForDownload.beforeFile, currentGifDataForDownload.afterFile, duration, quality)).blob;
+                }
+                
+                const sizeInKB = gifBlob.size / 1024;
+                fileSizeDisplay.textContent = `${sizeInKB.toFixed(1)} KB`;
+
+                // Attach blob to download button
+                finalDownloadBtn.onclick = () => {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(gifBlob);
+                    a.download = `${currentGifDataForDownload.id}_${duration}s_${quality}p.gif`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                };
+
+            }, 500); // Debounce to avoid excessive regeneration
+        }
+
+
+        // --- Combine Logic ---
+        combineGifBtn.addEventListener('click', () => {
+            combineGifList.innerHTML = '';
+            createdGifs.forEach(gifData => {
+                const item = document.createElement('div');
+                item.className = 'p-1 border bg-white rounded cursor-move';
+                item.dataset.id = gifData.id;
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(gifData.blob);
+                img.className = 'w-full h-auto object-cover rounded-sm';
+                item.appendChild(img);
+                combineGifList.appendChild(item);
+            });
+            
+            if (sortableCombineList) {
+                sortableCombineList.destroy();
+            }
+            sortableCombineList = new Sortable(combineGifList, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+            });
+
+            combineModal.classList.remove('hidden');
+        });
+
+        closeCombineModalBtn.addEventListener('click', () => combineModal.classList.add('hidden'));
+        
+        processCombineBtn.addEventListener('click', async () => {
+            const orderedIds = [...combineGifList.children].map(child => child.dataset.id);
+            const orderedGifs = orderedIds.map(id => createdGifs.find(g => g.id === id));
+            const aspectRatio = aspectRatioSelect.value;
+            const duration = orderedGifs.length * 2;
+            
+            const combinedGifData = {
+                orderedGifs,
+                aspectRatio,
+                id: 'combined-gif',
+                isCombined: true,
+                duration: duration
+            };
+            
+            combineModal.classList.add('hidden');
+            openDownloadModal(combinedGifData);
+        });
+
+        async function generateCombinedGif(gifsToCombine, aspectRatio, durationSec, quality) {
+             return new Promise(async (resolve, reject) => {
+                const [wRatio, hRatio] = aspectRatio.split('/').map(Number);
+                
+                // **UPDATED LOGIC**: Pre-load all images to find the maximum width
+                const loadedImages = [];
+                let maxWidth = 0;
+                for (const gifData of gifsToCombine) {
+                    const before = await loadImage(gifData.beforeFile);
+                    const after = await loadImage(gifData.afterFile);
+                    if (before.naturalWidth > maxWidth) {
+                        maxWidth = before.naturalWidth;
+                    }
+                    loadedImages.push({ before, after });
+                }
+
+                // Set a base width based on the max width found, capped at a reasonable size
+                const BASE_WIDTH_CAP = 800;
+                const baseWidth = maxWidth > BASE_WIDTH_CAP ? BASE_WIDTH_CAP : maxWidth;
+                const baseHeight = (baseWidth / wRatio) * hRatio;
+
+                const scale = quality / 100;
+                const canvasWidth = Math.round(baseWidth * scale);
+                const canvasHeight = Math.round(baseHeight * scale);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = canvasWidth;
+                canvas.height = canvasHeight;
+                const ctx = canvas.getContext('2d');
+                
+                const singleGifDuration = durationSec / gifsToCombine.length;
+                const frameDelay = 1000 / 30; // 30 FPS
+                const framesPerGif = singleGifDuration * 30;
+
+                const workerScriptUrl = await getGifWorkerUrl(); // Get local worker URL
+
+                const gif = new GIF({
+                    workers: 2,
+                    quality: 10,
+                    width: canvasWidth,
+                    height: canvasHeight,
+                    workerScript: workerScriptUrl // Use local URL
+                });
+                                
+                for (let i = 0; i < loadedImages.length; i++) {
+                    const { before: beforeImage, after: afterImage } = loadedImages[i];
+
+                    for (let j = 0; j < framesPerGif; j++) {
+                        const progress = j / framesPerGif;
+                        
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+                        
+                        // Fit image into the canvas while maintaining aspect ratio
+                        const imgAspectRatio = beforeImage.naturalWidth / beforeImage.naturalHeight;
+                        let drawWidth = canvasWidth;
+                        let drawHeight = canvasWidth / imgAspectRatio;
+
+                        if (drawHeight > canvasHeight) {
+                            drawHeight = canvasHeight;
+                            drawWidth = canvasHeight * imgAspectRatio;
+                        }
+                        
+                        const x = (canvasWidth - drawWidth) / 2;
+                        const y = (canvasHeight - drawHeight) / 2;
+
+                        ctx.drawImage(beforeImage, x, y, drawWidth, drawHeight);
+
+                        const slideWidth = drawWidth * progress;
+                        
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.rect(x, y, slideWidth, drawHeight);
+                        ctx.clip();
+                        ctx.drawImage(afterImage, x, y, drawWidth, drawHeight);
+                        ctx.restore();
+
+                        gif.addFrame(ctx, { copy: true, delay: frameDelay });
+                    }
+                }
+
+                gif.on('finished', (blob) => resolve({ blob }));
+                gif.on('abort', () => reject('Combined GIF creation aborted'));
+                gif.render();
+            });
+        }
+    </script>
+</body>
+</html>
+
